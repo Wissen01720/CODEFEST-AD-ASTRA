@@ -20,7 +20,7 @@ La entrega implementa el flujo completo solicitado para recuperación vectorial:
 | --------------------- | --------------------------------------------- |
 | Consultas             | 50 consultas, de `q001` a `q050`              |
 | Resultados            | 3 documentos y 10 fragmentos por consulta     |
-| Base vectorial        | 202.350 vectores de 1.024 dimensiones         |
+| Base vectorial        | 205.648 vectores de 1.024 dimensiones (1.782 documentos) |
 | Encoder               | `BAAI/bge-m3`                                 |
 | Índice                | FAISS `IndexFlatIP` con vectores normalizados |
 | Reproducibilidad      | `resultados.jsonl` se reproduce byte a byte   |
