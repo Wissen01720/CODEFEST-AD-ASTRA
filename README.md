@@ -208,3 +208,9 @@ uv run python scripts/validar_entrega.py --ejecutar-generador
 git diff --check
 git status
 ```
+
+## Licencia
+
+Este repositorio se distribuye bajo la [licencia MIT](LICENSE), una licencia de código abierto permisiva, tal como exige el reglamento de CodeFest Ad Astra 2026.
+
+Todas las dependencias de terceros usadas en el código (ver `pyproject.toml`) tienen licencias permisivas compatibles (MIT, BSD-3-Clause, Apache-2.0, entre otras), incluido el binario del sistema `tesseract-ocr` (Apache-2.0) usado para OCR vía `pytesseract`. El modelo de embeddings `BAAI/bge-m3` usado para construir la base vectorial también se distribuye bajo licencia MIT.

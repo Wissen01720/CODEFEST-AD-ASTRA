@@ -12,3 +12,7 @@ base_vectorial/
 data/processed/entrega/base_vectorial/
 entrega/base_vectorial_bge-m3.tar.gz
 data/processed/
+
+# Notas internas/privadas del usuario: no son entregables del reto, no subir.
+handoff_codefest_completo.md
+Resumenes_Codefest_AdAstra_2026.md
