@@ -32,6 +32,7 @@ FORMATO_POR_EXTENSION = {
     ".png": "imagen",
     ".jpg": "imagen",
     ".jpeg": "imagen",
+    ".avif": "imagen",
     ".pbf": "pbf",
 }
 

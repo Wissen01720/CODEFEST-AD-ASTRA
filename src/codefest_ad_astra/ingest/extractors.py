@@ -13,19 +13,46 @@ from PIL import Image
 import pytesseract
 
 
-def extract_pdf_paginas(path: Path) -> list[str]:
+def _ocr_pagina_pdf(pagina, idioma_ocr: str = "spa+eng+por", resolucion: int = 200) -> str:
+    """OCR de respaldo para una página de PDF sin capa de texto (escaneada).
+
+    Se detectó en el corpus real (ver diagnóstico de cobertura) que ~48
+    documentos PDF son escaneos puros (imagen de la página, sin texto
+    embebido) y por eso `extract_text()` devuelve vacío para todas sus
+    páginas, tirando el documento entero a `[AVISO] ... quedó vacío`. Aquí
+    se renderiza la página como imagen y se le aplica el mismo OCR que ya
+    se usa para archivos de imagen sueltos (`extract_image`).
+
+    Envuelto en try/except porque el render de página a imagen puede fallar
+    en PDFs corruptos o con fuentes exóticas -- en ese caso se prefiere
+    devolver "" (la página queda vacía, como antes) en vez de tumbar la
+    extracción de todo el documento."""
+    try:
+        imagen = pagina.to_image(resolution=resolucion).original
+        return pytesseract.image_to_string(imagen, lang=idioma_ocr)
+    except Exception:
+        return ""
+
+
+def extract_pdf_paginas(path: Path, ocr_si_vacio: bool = True) -> list[str]:
     """Extrae el texto de cada página del PDF por separado. Se deja así (en vez
     de un solo string) para poder detectar y quitar headers/footers repetidos
     entre páginas antes de unir todo en un solo texto (ver cleaning.py).
 
     x_tolerance bajo (en vez del default de pdfplumber) evita que se peguen
     palabras completas en párrafos justificados con espacios angostos
-    (ej. 'Paraelvolumen' en vez de 'Para el volumen')."""
+    (ej. 'Paraelvolumen' en vez de 'Para el volumen').
+
+    Si una página no tiene texto extraíble (PDF escaneado, sin capa de
+    texto) y `ocr_si_vacio` está activo, se recurre a OCR sobre el render de
+    esa página antes de darla por vacía."""
     paginas = []
     with pdfplumber.open(path) as pdf:
         for pagina in pdf.pages:
-            texto = pagina.extract_text(x_tolerance=1)
-            paginas.append(texto or "")
+            texto = pagina.extract_text(x_tolerance=1) or ""
+            if not texto.strip() and ocr_si_vacio:
+                texto = _ocr_pagina_pdf(pagina)
+            paginas.append(texto)
     return paginas
 
 
@@ -150,6 +177,10 @@ def extract_image(path: Path, idioma_ocr: str = "spa+eng+por") -> str:
         sudo apt install -y tesseract-ocr-spa tesseract-ocr-por
     """
     imagen = Image.open(path)
+    # pytesseract falla con "Unsupported image format/type" en formatos que
+    # PIL sí abre pero guarda distinto internamente (ej. AVIF) -- forzar RGB
+    # antes de pasarlo normaliza esto sin afectar el OCR de png/jpg normales.
+    imagen = imagen.convert("RGB")
     return pytesseract.image_to_string(imagen, lang=idioma_ocr)
 
 
@@ -189,6 +220,7 @@ EXTRACTORES_POR_EXTENSION = {
     ".png": extract_image,
     ".jpg": extract_image,
     ".jpeg": extract_image,
+    ".avif": extract_image,
     ".pbf": extract_pbf,
 }
 
