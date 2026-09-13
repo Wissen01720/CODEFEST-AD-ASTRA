@@ -58,9 +58,29 @@ def detectar_idioma(texto: str) -> str:
         return "und"
 
 
+_NUMERO_FINAL = re.compile(r"\d+\s*$")
+
+
+def _clave_boilerplate(linea: str) -> str:
+    """Normaliza una línea para detectar headers/footers repetidos que
+    incluyen la numeración de página (ej. 'Center for Security and Emerging
+    Technology | 6', distinta en cada página solo por el número final).
+
+    Sin esto, la comparación por igualdad exacta nunca detecta estos
+    footers como repetidos -- cada página produce una línea literal
+    distinta -- y el texto del footer queda pegado al último párrafo real
+    de la página, coleándose en el chunk (rompe el requisito de que cada
+    fragmento termine en oración completa)."""
+    return _NUMERO_FINAL.sub("#", linea)
+
+
 def quitar_lineas_repetidas(paginas: list[str], umbral: float = 0.6) -> list[str]:
     """Elimina líneas que se repiten en más del `umbral` de las páginas de un
     mismo documento (headers/footers/numeración de página tipo boilerplate).
+
+    La comparación ignora el número final de cada línea (ver
+    `_clave_boilerplate`) para que un footer como "Título | 6" se reconozca
+    como la misma línea repetida en "Título | 7", "Título | 8", etc.
 
     Úsalo opcionalmente en documentos con muchas páginas (PDFs largos) ANTES
     de unir todo en un solo texto, pasando la lista de textos por página.
@@ -70,16 +90,17 @@ def quitar_lineas_repetidas(paginas: list[str], umbral: float = 0.6) -> list[str
 
     conteo: dict[str, int] = {}
     for pagina in paginas:
-        for linea in set(l.strip() for l in pagina.split("\n") if l.strip()):
-            conteo[linea] = conteo.get(linea, 0) + 1
+        for clave in set(_clave_boilerplate(l.strip()) for l in pagina.split("\n") if l.strip()):
+            conteo[clave] = conteo.get(clave, 0) + 1
 
     limite = umbral * len(paginas)
-    lineas_boilerplate = {linea for linea, n in conteo.items() if n >= limite}
+    claves_boilerplate = {clave for clave, n in conteo.items() if n >= limite}
 
     resultado = []
     for pagina in paginas:
         lineas_filtradas = [
-            l for l in pagina.split("\n") if l.strip() not in lineas_boilerplate
+            l for l in pagina.split("\n")
+            if _clave_boilerplate(l.strip()) not in claves_boilerplate
         ]
         resultado.append("\n".join(lineas_filtradas))
     return resultado
