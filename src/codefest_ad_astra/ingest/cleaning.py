@@ -74,13 +74,19 @@ def _clave_boilerplate(linea: str) -> str:
     return _NUMERO_FINAL.sub("#", linea)
 
 
-def quitar_lineas_repetidas(paginas: list[str], umbral: float = 0.6) -> list[str]:
+def quitar_lineas_repetidas(paginas: list[str], umbral: float = 0.35) -> list[str]:
     """Elimina líneas que se repiten en más del `umbral` de las páginas de un
     mismo documento (headers/footers/numeración de página tipo boilerplate).
 
     La comparación ignora el número final de cada línea (ver
     `_clave_boilerplate`) para que un footer como "Título | 6" se reconozca
     como la misma línea repetida en "Título | 7", "Título | 8", etc.
+
+    Umbral bajado de 0.6 a 0.35: se detectó en el corpus real un patrón de
+    encabezado/pie ALTERNADO por página par/impar (típico de libros/informes
+    maquetados a doble página, ej. "WWW.DEFENSEAI.EU | N" solo en páginas
+    pares) -- cada variante individual cubre ~40-50% de las páginas, no el
+    ~100% que asumía el umbral original, así que nunca cruzaba el 60%.
 
     Úsalo opcionalmente en documentos con muchas páginas (PDFs largos) ANTES
     de unir todo en un solo texto, pasando la lista de textos por página.
@@ -103,6 +109,50 @@ def quitar_lineas_repetidas(paginas: list[str], umbral: float = 0.6) -> list[str
             if _clave_boilerplate(l.strip()) not in claves_boilerplate
         ]
         resultado.append("\n".join(lineas_filtradas))
+    return resultado
+
+
+_SUFIJO_CON_NUMERO = re.compile(r"(\S+)[ \t]+(\d{1,4})\s*$")
+
+
+def quitar_sufijo_pegado_repetido(paginas: list[str], umbral: float = 0.35) -> list[str]:
+    """Complementa `quitar_lineas_repetidas`: quita un footer que quedó
+    PEGADO sin salto de línea al final del último párrafo real de la página
+    (ej. '...remains to be seen. WWW.DEFENSEAI.EU 7'), caso que la función
+    anterior no puede detectar porque opera línea por línea y aquí no hay
+    una línea propia que aislar.
+
+    Se identifica por: un token sin espacios (ej. 'WWW.DEFENSEAI.EU')
+    seguido de un número de página al final absoluto del texto de la
+    página, cuando ESE MISMO token se repite en la mayoría de las páginas
+    (el número cambia, el token no). Deliberadamente estricto -- exige
+    token + número pegados al final exacto -- para no arriesgar cortar
+    contenido real que por coincidencia termine en un número.
+    """
+    if len(paginas) < 3:
+        return paginas
+
+    tokens_por_pagina: list[str | None] = []
+    conteo: dict[str, int] = {}
+    for pagina in paginas:
+        m = _SUFIJO_CON_NUMERO.search(pagina.rstrip())
+        token = m.group(1) if m else None
+        tokens_por_pagina.append(token)
+        if token:
+            conteo[token] = conteo.get(token, 0) + 1
+
+    limite = umbral * len(paginas)
+    tokens_boilerplate = {t for t, n in conteo.items() if n >= limite}
+    if not tokens_boilerplate:
+        return paginas
+
+    resultado = []
+    for pagina, token in zip(paginas, tokens_por_pagina):
+        if token in tokens_boilerplate:
+            recortada = pagina.rstrip()
+            m = _SUFIJO_CON_NUMERO.search(recortada)
+            pagina = recortada[: m.start()].rstrip()
+        resultado.append(pagina)
     return resultado
 
 
@@ -140,9 +190,10 @@ def procesar_documento(
     if quitar_boilerplate is None:
         quitar_boilerplate = len(paginas) >= 3
 
-    paginas_trabajo = (
-        quitar_lineas_repetidas(paginas) if quitar_boilerplate else paginas
-    )
+    paginas_trabajo = paginas
+    if quitar_boilerplate:
+        paginas_trabajo = quitar_lineas_repetidas(paginas_trabajo)
+        paginas_trabajo = quitar_sufijo_pegado_repetido(paginas_trabajo)
 
     texto_unido = "\n\n".join(paginas_trabajo)
 

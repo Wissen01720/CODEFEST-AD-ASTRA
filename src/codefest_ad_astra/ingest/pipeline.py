@@ -18,7 +18,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from .extractors import extraer_texto, extract_pdf_paginas
-from .cleaning import limpiar_texto, detectar_idioma, quitar_lineas_repetidas, normalizar_saltos_pdf
+from .cleaning import (
+    limpiar_texto,
+    detectar_idioma,
+    quitar_lineas_repetidas,
+    quitar_sufijo_pegado_repetido,
+    normalizar_saltos_pdf,
+)
 from .validation import Document
 
 FORMATO_POR_EXTENSION = {
@@ -126,6 +132,7 @@ def procesar_corpus(carpeta_corpus: Path):
                 # Extracción por página para poder quitar headers/footers repetidos
                 paginas = extract_pdf_paginas(path)
                 paginas_limpias = quitar_lineas_repetidas(paginas)
+                paginas_limpias = quitar_sufijo_pegado_repetido(paginas_limpias)
                 texto_crudo = "\n\n".join(p for p in paginas_limpias if p.strip())
                 texto_crudo = normalizar_saltos_pdf(texto_crudo)
             else:

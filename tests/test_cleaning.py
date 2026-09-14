@@ -1,5 +1,5 @@
 """Tests de Fase 2 (limpieza) — cleaning.py."""
-from codefest_ad_astra.ingest.cleaning import quitar_lineas_repetidas
+from codefest_ad_astra.ingest.cleaning import quitar_lineas_repetidas, quitar_sufijo_pegado_repetido
 
 
 def test_quitar_lineas_repetidas_identicas():
@@ -61,3 +61,47 @@ def test_quitar_lineas_repetidas_no_afecta_contenido_no_repetido():
 def test_quitar_lineas_repetidas_menos_de_tres_paginas_no_hace_nada():
     paginas = ["Repetido\nA", "Repetido\nB"]
     assert quitar_lineas_repetidas(paginas) == paginas
+
+
+def test_quitar_lineas_repetidas_footer_alternado_par_impar():
+    """Bug real (corpus DAIO): un informe maquetado a doble página tiene un
+    footer distinto en páginas pares vs. impares. Cada uno cubre ~50% de las
+    páginas -- por debajo del umbral original de 0.6, nunca se detectaba."""
+    paginas = [
+        "Contenido página 1.\nRISKY INCREMENTALISM 2",
+        "Contenido página 2.\nWWW.DEFENSEAI.EU 3",
+        "Contenido página 3.\nRISKY INCREMENTALISM 4",
+        "Contenido página 4.\nWWW.DEFENSEAI.EU 5",
+        "Contenido página 5.\nRISKY INCREMENTALISM 6",
+        "Contenido página 6.\nWWW.DEFENSEAI.EU 7",
+    ]
+    resultado = quitar_lineas_repetidas(paginas)
+    for pagina in resultado:
+        assert "RISKY INCREMENTALISM" not in pagina
+        assert "WWW.DEFENSEAI.EU" not in pagina
+
+
+def test_quitar_sufijo_pegado_repetido_footer_sin_salto_de_linea():
+    """El footer queda pegado sin '\\n' al final del último párrafo real
+    -- quitar_lineas_repetidas no lo puede aislar como línea propia."""
+    paginas = [
+        "Texto real de la página uno, sin cortar. WWW.DEFENSEAI.EU 5",
+        "Otro párrafo real distinto aquí. WWW.DEFENSEAI.EU 6",
+        "Un tercer párrafo con más contenido. WWW.DEFENSEAI.EU 7",
+    ]
+    resultado = quitar_sufijo_pegado_repetido(paginas)
+    for pagina in resultado:
+        assert "WWW.DEFENSEAI.EU" not in pagina
+    assert resultado[0] == "Texto real de la página uno, sin cortar."
+
+
+def test_quitar_sufijo_pegado_repetido_no_afecta_numeros_reales():
+    """Un número real al final de una página (no un footer) no debe
+    quitarse si el 'token' que lo precede no se repite en otras páginas."""
+    paginas = [
+        "El total de acuerdos firmados fue 15",
+        "Este párrafo es distinto y no termina en número.",
+        "Un tercer párrafo cualquiera, sin relación.",
+    ]
+    resultado = quitar_sufijo_pegado_repetido(paginas)
+    assert resultado == paginas
