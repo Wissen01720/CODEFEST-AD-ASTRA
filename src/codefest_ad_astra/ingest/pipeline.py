@@ -13,6 +13,7 @@ F1_/F2_/F3_ en cualquier nivel, ej.):
 """
 import argparse
 import hashlib
+import json
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -106,7 +107,10 @@ def filtrar_pbf_zoom_maximo(archivos_pbf: list[Path]) -> list[Path]:
     return seleccionados
 
 
-def procesar_corpus(carpeta_corpus: Path):
+def procesar_corpus(carpeta_corpus: Path, *, ya_procesados: set[str] | None = None):
+    """`ya_procesados`: rutas relativas (como string) que ya están en el
+    archivo de salida de una corrida anterior interrumpida -- se saltan sin
+    reprocesarlas. Ver `--reanudar` en `main()`."""
     todos = [p for p in carpeta_corpus.rglob("*") if p.suffix.lower() in FORMATO_POR_EXTENSION]
     excluidos = [p for p in todos if _PATRON_MANIFIESTO.search(p.stem)]
     archivos = [p for p in todos if p not in excluidos]
@@ -124,6 +128,11 @@ def procesar_corpus(carpeta_corpus: Path):
         pbf_filtrados = filtrar_pbf_zoom_maximo(archivos_pbf)
         print(f"  [PBF] {len(archivos_pbf)} teselas encontradas, procesando solo el zoom máximo: {len(pbf_filtrados)}")
         archivos = [p for p in archivos if p.suffix.lower() != ".pbf"] + pbf_filtrados
+
+    if ya_procesados:
+        antes = len(archivos)
+        archivos = [p for p in archivos if str(p.relative_to(carpeta_corpus)) not in ya_procesados]
+        print(f"  [REANUDAR] {antes - len(archivos)} archivos ya procesados en la corrida anterior, se saltan")
 
     for path in archivos:
         ruta_relativa = path.relative_to(carpeta_corpus)
@@ -161,14 +170,31 @@ def main():
     parser = argparse.ArgumentParser(description="Fases 1+2: extracción y limpieza del corpus")
     parser.add_argument("--corpus", type=Path, required=True, help="Carpeta raíz del corpus crudo")
     parser.add_argument("--salida", type=Path, required=True, help="Archivo JSONL de salida")
+    parser.add_argument(
+        "--reanudar", action="store_true",
+        help="Si --salida ya existe (de una corrida interrumpida), continúa agregando "
+             "solo lo que falte en vez de reprocesar todo desde cero.",
+    )
     args = parser.parse_args()
 
     args.salida.parent.mkdir(parents=True, exist_ok=True)
 
-    total = 0
-    with open(args.salida, "w", encoding="utf-8") as f:
-        for doc in procesar_corpus(args.corpus):
+    ya_procesados: set[str] = set()
+    modo = "w"
+    if args.reanudar and args.salida.exists():
+        with open(args.salida, encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if linea:
+                    ya_procesados.add(json.loads(linea)["fuente"])
+        print(f"[REANUDAR] {len(ya_procesados)} documentos ya en {args.salida}, se continúa")
+        modo = "a"
+
+    total = len(ya_procesados)
+    with open(args.salida, modo, encoding="utf-8") as f:
+        for doc in procesar_corpus(args.corpus, ya_procesados=ya_procesados):
             f.write(doc.to_json_line() + "\n")
+            f.flush()
             total += 1
 
     print(f"\nListo: {total} documentos procesados -> {args.salida}")
