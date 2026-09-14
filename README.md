@@ -20,7 +20,7 @@ La entrega implementa el flujo completo solicitado para recuperación vectorial:
 | --------------------- | --------------------------------------------- |
 | Consultas             | 50 consultas, de `q001` a `q050`              |
 | Resultados            | 3 documentos y 10 fragmentos por consulta     |
-| Base vectorial        | 205.648 vectores de 1.024 dimensiones (1.782 documentos) |
+| Base vectorial        | 205.547 vectores de 1.024 dimensiones (1.782 documentos) |
 | Encoder               | `BAAI/bge-m3`                                 |
 | Índice                | FAISS `IndexFlatIP` con vectores normalizados |
 | Reproducibilidad      | `resultados.jsonl` se reproduce byte a byte   |
@@ -208,6 +208,12 @@ uv run python scripts/validar_entrega.py --ejecutar-generador
 git diff --check
 git status
 ```
+
+## Limitaciones conocidas
+
+- **1 documento excluido intencionalmente**: `DOC-ca8dd615dd` (PDF sobre el Convenio de Minamata) usa una fuente tipográfica sin tabla `ToUnicode`; la extracción solo recupera glyph IDs, no texto real. Indexarlo agregaría ~3600 vectores sin significado semántico.
+- **Documentos con contenido tabular aplanado a texto sin puntuación real** (ej. listas de colaboradores en columnas, atlas de estadísticas con datos numéricos por país) no se pueden dividir en fragmentos sin violar el requisito de "ninguna oración incompleta" del reto, ya que el chunker solo tiene fallback de partición segura para formatos estructurados (csv/xlsx/pbf), no para prosa de PDF/JSON. Estos documentos quedan fuera de la base vectorial; se identificaron ~370 casos de este tipo durante la limpieza de headers/footers.
+- **Footers de página pegados sin separador y sin texto distintivo** (ej. un número de página suelto al final de un párrafo, tipo `"...without 32"`) no se detectan de forma segura: no hay manera de distinguirlos de una oración real que termine en un número pequeño sin arriesgar falsos positivos. Se corrigieron tres variantes más comunes (footer en línea propia con número final, footer alternado por página par/impar, footer pegado con un token distintivo repetido), pero esta variante residual puede dejar ocasionalmente un fragmento cortado a mitad de oración.
 
 ## Licencia
 
